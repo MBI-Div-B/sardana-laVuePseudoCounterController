@@ -11,43 +11,61 @@ from os.path import join
 
 
 class LaVuePseudoCounterController(PseudoCounterController):
-    counter_roles = "input_image"
-    pseudo_counter_roles = "ouput_roi"
+    counter_roles = ("input_image",)
+    pseudo_counter_roles = ("output_roi",)
 
     ctrl_attributes = {
         "lavue_tangoDS": {
             Type: str,
             Description: ("lavue tangoDS address"),
-            DefaultValue: "rsxs/lavuecontroller/henry",
+            #DefaultValue: "rsxs/lavuecontroller/henry",
         },
         "ROI_name": {
             Type: str,
             Description: ("name of the ROI"),
-            DefaultValue: "dummy_name",
+            #DefaultValue: "dummy_name",
         },
+        "ROI_coords": {
+            Type: (int,),
+            Description: ("ROI corners"),
+        }
     }
 
     def __init__(self, inst, props, *args, **kwargs):
         super(PseudoCounterController, self).__init__(inst, props, *args, **kwargs)
         self._lavue_tangoDS = ""
-        self.create_attribute_proxy()
-        self._ROI_name = None
+        self._ROI_name = ""
+        self._mean = 0
         self._ROI_coords = [0, 0, 0, 0]
-
+    
     def GetCtrlPar(self, par):
-        if par in self.ctrl_attributes.keys():
-            getattr(f"_{par}")
+        if par == "ROI_name":
+            return self._ROI_name
+        elif par == "lavue_tangoDS":
+            return self._lavue_tangoDS
+        elif par == "ROI_coords":
+            return self._ROI_coords
+        # if par in self.ctrl_attributes.keys():
+        #     getattr(self, f"_{par}")
 
     def SetCtrlPar(self, par, value):
-        if par in self.ctrl_attributes.keys():
-            setattr(f"_{par}", value)
+        # if par in self.ctrl_attributes.keys():
+        #     setattr(self, f"_{par}", value)
+        if par == "ROI_name":
+            self._ROI_name = value
+        elif par == "lavue_tangoDS":
+            self._lavue_tangoDS = value
+            self.create_attribute_proxy()
+        self.fetch_ROI()
 
     def Calc(self, axis, image):
-        if axis == 0:
+        if axis == 1:
+            image = image[0]
+            #print(f'axis={axis}, image={image}')
             # in lavuecontroller x1, y1, x2, y2
             x1, y1, x2, y2 = self._ROI_coords
-            mean = np.mean(image[y1:y2, x1:x2])
-            return mean
+            self._mean = np.mean(image[y1:y2, x1:x2])
+            return self._mean
 
     def create_attribute_proxy(self):
         try:
@@ -61,7 +79,7 @@ class LaVuePseudoCounterController(PseudoCounterController):
         except:
             self.lavue_attr = None
 
-    def fetch_ROI(self, e):
+    def fetch_ROI(self, e=None):
         if self.lavue_attr is not None:
             try:
                 ROIs = json.loads(self.lavue_attr.read().value)
@@ -72,8 +90,7 @@ class LaVuePseudoCounterController(PseudoCounterController):
             self.update_coords()
 
     def update_coords(self):
-        if self.ROI_keys is not None:
-            ROI = self.ROI_dict.get(self._ROI_name)
+        if self._ROI_name != "":
+            ROI = self.ROI_dict.get(self._ROI_name)[0]
             if ROI is not None:
-                # order is x1, y1, x2, y2
                 self._ROI_coords = list(map(lambda x: max(x, 0), ROI))
